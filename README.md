@@ -1,6 +1,8 @@
 # R Code for "From Pest Traps to Management Maps..."
 This repository contains the R scripts to reproduce the analyses in the manuscript:
+
 **Bang et al. (In progress).** "From Pest Traps to Management Maps: A Predictive Framework for the Temporal Abundance Change of Japanese Pine Bast Scale to Guide National Forest Adaptation and Timely Control".
+
 The code was written by **Seunguk Kim** (adrenaline@snu.ac.kr).
 
 --- 
