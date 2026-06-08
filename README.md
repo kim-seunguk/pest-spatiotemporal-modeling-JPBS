@@ -57,7 +57,7 @@ Bang et al. (2025). Data for: "From Pest Traps to Management Maps: Predicting th
 Bang et al. (In progress). "From Pest Traps to Management Maps: Predicting the Abundance and Phenology of Japanese Pine Bast Scale to Guide National Forest Adaptation and Timely Control".
 
 ## Acknowledgments
-Google Gemini and OpenAI ChatGPT were used to assist with code refinement and debugging.
+Google Gemini, OpenAI ChatGPT, and Anthropic Claude Code were used to assist with code refinement and debugging.
 
 ## License
 This project is licensed under the MIT License. See the LICENSE file for details.
