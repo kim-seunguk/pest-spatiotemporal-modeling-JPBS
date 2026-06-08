@@ -1,7 +1,7 @@
 # R Code for "From Pest Traps to Management Maps..."
 This repository contains the R scripts to reproduce the analyses in the manuscript:
 
-**Bang et al. (In progress).** "From Pest Traps to Management Maps: A Predictive Framework for the Temporal Abundance Change of Japanese Pine Bast Scale to Guide National Forest Adaptation and Timely Control".
+**Bang et al. (In progress).** "From Pest Traps to Management Maps: Predicting the Abundance and Phenology of Japanese Pine Bast Scale to Guide National Forest Adaptation and Timely Control".
 
 The code was written by **Seunguk Kim** (adrenaline@snu.ac.kr).
 
@@ -22,6 +22,7 @@ Zenodo Archive: https://doi.org/10.5281/zenodo.17403184
 |   |-- 01_process_phenology_data.R
 |   |-- 02_run_xgboost_pipeline.R
 |   |-- 03_run_statistical_analysis.R
+|   |-- 04_evaluate_spatial_temporal_performance.R
 |-- data/
 |   |-- occurrence/
 |   |-- predictors/1km/
@@ -43,6 +44,7 @@ The scripts must be executed from the project root directory (pest-spatiotempora
 source("codes/01_process_phenology_data.R")
 source("codes/02_run_xgboost_pipeline.R")
 source("codes/03_run_statistical_analysis.R")
+source("codes/04_evaluate_spatial_temporal_performance.R")
 ```
 After running all scripts, the output/ directory (created at the project root) will contain all reproducible artifacts, including model files (.rds), prediction rasters (.tif), and statistical tables (.csv).
 
@@ -50,9 +52,9 @@ After running all scripts, the output/ directory (created at the project root) w
 If you use this code or data in your research, please cite both the dataset and the associated manuscript.
 
 ### Dataset
-Bang et al. (2025). Data for: "From Pest Traps to Management Maps: A Predictive Framework for the Temporal Abundance Change of Japanese Pine Bast Scale to Guide National Forest Adaptation and Timely Control" [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.17403184
+Bang et al. (2025). Data for: "From Pest Traps to Management Maps: Predicting the Abundance and Phenology of Japanese Pine Bast Scale to Guide National Forest Adaptation and Timely Control" [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.17403184
 ### Manuscript
-Bang et al. (In progress). "From Pest Traps to Management Maps: A Predictive Framework for the Temporal Abundance Change of Japanese Pine Bast Scale to Guide National Forest Adaptation and Timely Control".
+Bang et al. (In progress). "From Pest Traps to Management Maps: Predicting the Abundance and Phenology of Japanese Pine Bast Scale to Guide National Forest Adaptation and Timely Control".
 
 ## Acknowledgments
 Google Gemini and OpenAI ChatGPT were used to assist with code refinement and debugging.

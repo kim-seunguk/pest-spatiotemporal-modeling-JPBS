@@ -17,7 +17,7 @@
 #
 # Usage Notes:
 # This is the FIRST script in the analysis pipeline. It must be run
-# before '03_run_xgboost_pipeline.R'.
+# before '02_run_xgboost_pipeline.R'.
 #
 # -------------------------------------------------------------------------- #
 
@@ -28,7 +28,6 @@
 #
 
 #### 0. Setup ####
-#### 0. Setup ####
 print("--- 0. Setup ---")
 print(paste("Pipeline started at:", Sys.time()))
 
@@ -37,7 +36,6 @@ suppressPackageStartupMessages({
   library(here)
   library(tidyverse)
   library(SuppDists) # For Johnson SB distribution
-  library(sf)        # Used in Part 5 (now removed), but kept if other scripts depend on it
 })
 
 #---- 0.2. Global Path and File Configuration ----
@@ -199,7 +197,7 @@ if (file.exists(path_phenology_clean) && file.exists(path_phenology_all_metrics)
     group_by(Year, Area, Region, trap_no) %>%
     summarise(n_obs = sum(captures > 0), .groups = 'drop')
   
-  # [cite_start]Define minimum observations needed for modeling (as per manuscript [cite: 131])
+  # Define minimum observations needed for modeling (as per the manuscript).
   MIN_OBS_FOR_MODEL <- 5
   sites_for_model <- phenology_data_with_counts %>% filter(n_obs >= MIN_OBS_FOR_MODEL)
   sites_for_direct <- phenology_data_with_counts %>% filter(n_obs < MIN_OBS_FOR_MODEL)
@@ -235,7 +233,7 @@ if (file.exists(path_phenology_clean) && file.exists(path_phenology_all_metrics)
              peak = get_mode(gamma, delta, xi, lambda)) %>%
       ungroup()
     
-    # [cite_start]Apply strict validation protocol (as per manuscript [cite: 137-141])
+    # Apply strict validation protocol (as per the manuscript).
     phenology_from_model <- phenology_metrics_unfiltered %>%
       filter(lambda >= 2, xi >= 0, delta <= 8, delta >= 0.71, onset >= 0, peak >= 0, peak >= onset) %>%
       mutate(method = "model") %>%
