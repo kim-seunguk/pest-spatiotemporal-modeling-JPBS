@@ -8,9 +8,10 @@
 #
 # Description:
 # This script decomposes the reported predictive accuracy into its spatial
-# and temporal components, and visualizes observed vs. predicted values.
-# It produces the data for Supplementary Table S6 and Supplementary
-# Figure S4, added in response to the reviewers.
+# and temporal components, visualizes observed vs. predicted values, and runs
+# the supporting interannual and extreme-value diagnostics. It produces the
+# data for Supplementary Table S6 and Supplementary Figure S4 and the numbers
+# reported in Supplementary Text S4, added in response to the reviewers.
 #
 # Associated Manuscript:
 # Bang, S., Kim, S., et al. "From Pest Traps to Management Maps..."
@@ -32,6 +33,12 @@
 #    assessing across-year transfer.
 # 4. Observed vs. predicted: out-of-fold k-fold predictions for all three
 #    response variables (Figure S4).
+# 5. Year-as-predictor: whether adding the calendar year improves out-of-fold
+#    vs leave-one-year-out accuracy, with a SHAP ranking of the year term.
+# 6. Paired-site interannual shift: predicted vs observed year-to-year shift
+#    at traps monitored in both years, with the out-of-year rank correlation.
+# 7. Extreme-value diagnostic: recall of top-decile outbreak traps and the
+#    predicted/observed ratio in the highest-abundance decile.
 #
 
 #### 0. Setup ####
@@ -366,5 +373,242 @@ ggsave(
   dpi = 600
 )
 print(paste("--- Observed vs. predicted figure saved to:", output_figure_path, "---"))
+
+
+#### 4. Year-as-Predictor Diagnostic (Text S4) ####
+#
+# Description:
+# Tests whether adding the calendar Year (2022/2023) as a predictor improves
+# prediction. If a year term raises the pooled out-of-fold accuracy but not the
+# leave-one-year-out accuracy, the model is memorizing the annual mean rather
+# than predicting interannual change. A SHAP ranking shows how influential the
+# year term is relative to the environmental predictors. This reproduces the
+# year-as-predictor numbers reported in Text S4.
+#
+
+print("\n--- 4. Year-as-Predictor Diagnostic (for Text S4) ---")
+
+# Pooled out-of-fold R-squared for a given feature set (k-fold, fixed seed).
+oof_rsquared <- function(data, features, response_var, best_params,
+                         k = K_FOLDS, seed = 42) {
+  set.seed(seed)
+  folds <- createFolds(data[[response_var]], k = k, list = TRUE)
+  predictions <- rep(NA_real_, nrow(data))
+  for (fold_index in folds) {
+    model <- fit_xgb_model(data[-fold_index, ], features, response_var, best_params)
+    predictions[fold_index] <-
+      predict_xgb_model(model, data[fold_index, ], features)
+  }
+  unname(postResample(predictions, data[[response_var]])["Rsquared"])
+}
+
+# Mean leave-one-year-out R-squared across both directions for a feature set.
+loyo_mean_rsquared <- function(data, features, response_var, best_params) {
+  scores <- c()
+  for (direction in list(c(2022, 2023), c(2023, 2022))) {
+    train_data <- data %>% filter(Year == direction[1])
+    test_data <- data %>% filter(Year == direction[2])
+    if (nrow(train_data) < 10 || nrow(test_data) < 3) next
+    model <- fit_xgb_model(train_data, features, response_var, best_params)
+    predictions <- predict_xgb_model(model, test_data, features)
+    scores <- c(scores,
+                unname(postResample(predictions, test_data[[response_var]])["Rsquared"]))
+  }
+  mean(scores, na.rm = TRUE)
+}
+
+year_results_list <- list()
+year_shap_list <- list()
+for (response_var in response_vars) {
+  cat(paste("-> Year-as-predictor for:", response_var, "\n"))
+  current_data <- get_response_data(master_data, response_var)
+  best_params <- best_params_list[[response_var]]
+  features_base <- features_list[[response_var]]
+  features_year <- c(features_base, "Year")
+
+  year_results_list[[length(year_results_list) + 1]] <- tibble(
+    Response_Var = response_var,
+    Metric = "Pooled out-of-fold R2",
+    Without_Year = oof_rsquared(current_data, features_base, response_var, best_params),
+    With_Year = oof_rsquared(current_data, features_year, response_var, best_params)
+  )
+  year_results_list[[length(year_results_list) + 1]] <- tibble(
+    Response_Var = response_var,
+    Metric = "Leave-one-year-out mean R2",
+    Without_Year = loyo_mean_rsquared(current_data, features_base, response_var, best_params),
+    With_Year = loyo_mean_rsquared(current_data, features_year, response_var, best_params)
+  )
+
+  # SHAP importance of the year term (model fit on the full data with year added).
+  model_year <- fit_xgb_model(current_data, features_year, response_var, best_params)
+  shap_contributions <- predict(
+    model_year,
+    data.matrix(current_data %>% dplyr::select(all_of(features_year))),
+    predcontrib = TRUE
+  )
+  shap_features <- shap_contributions[, seq_along(features_year), drop = FALSE]
+  colnames(shap_features) <- features_year
+  mean_abs_shap <- sort(colMeans(abs(shap_features)), decreasing = TRUE)
+  year_rank <- which(names(mean_abs_shap) == "Year")
+  year_shap_list[[length(year_shap_list) + 1]] <- tibble(
+    Response_Var = response_var,
+    Year_SHAP_rank = year_rank,
+    N_features = length(mean_abs_shap)
+  )
+  cat(sprintf("   Year SHAP importance rank: %d of %d features\n",
+              year_rank, length(mean_abs_shap)))
+}
+
+year_predictor_table <- bind_rows(year_results_list) %>%
+  mutate(Delta = With_Year - Without_Year)
+year_shap_table <- bind_rows(year_shap_list)
+
+write.csv(year_predictor_table,
+          file.path(dir_evaluation, "year_as_predictor.csv"), row.names = FALSE)
+write.csv(year_shap_table,
+          file.path(dir_evaluation, "year_as_predictor_shap_rank.csv"), row.names = FALSE)
+print(year_predictor_table %>% mutate(across(where(is.numeric), ~ round(., 3))))
+print(year_shap_table)
+
+
+#### 5. Paired-Site Interannual Shift (Text S4) ####
+#
+# Description:
+# Among traps monitored in both years, the model is held fixed and each trap is
+# predicted under its 2022 and its 2023 predictor values, so the predicted
+# year-to-year shift comes only from the dynamic predictors. A model trained on
+# 2022 alone (out-of-sample for 2023) is compared with the full pooled model
+# (in-sample). The out-of-year rank correlation summarizes whether the spatial
+# ordering is recovered in the held-out year. This reproduces the paired-site
+# numbers reported in Text S4.
+#
+
+print("\n--- 5. Paired-Site Interannual Shift (for Text S4) ---")
+
+site_key <- c("Area", "Region", "trap_no")
+
+#---- 5.1. Out-of-Year Rank Correlation (held-out-year spatial agreement) ----
+rank_corr_list <- list()
+for (response_var in response_vars) {
+  current_data <- get_response_data(master_data, response_var)
+  features <- features_list[[response_var]]
+  best_params <- best_params_list[[response_var]]
+  observed_held_out <- c()
+  predicted_held_out <- c()
+  for (direction in list(c(2022, 2023), c(2023, 2022))) {
+    train_data <- current_data %>% filter(Year == direction[1])
+    test_data <- current_data %>% filter(Year == direction[2])
+    if (nrow(train_data) < 10 || nrow(test_data) < 3) next
+    model <- fit_xgb_model(train_data, features, response_var, best_params)
+    predicted_held_out <-
+      c(predicted_held_out, predict_xgb_model(model, test_data, features))
+    observed_held_out <- c(observed_held_out, test_data[[response_var]])
+  }
+  rank_corr_list[[length(rank_corr_list) + 1]] <- tibble(
+    Response_Var = response_var,
+    Out_of_year_Spearman = cor(predicted_held_out, observed_held_out, method = "spearman")
+  )
+}
+rank_corr_table <- bind_rows(rank_corr_list)
+
+#---- 5.2. Predicted vs. Observed Interannual Shift at Paired Traps ----
+shift_list <- list()
+for (response_var in response_vars) {
+  current_data <- get_response_data(master_data, response_var)
+  features <- features_list[[response_var]]
+  best_params <- best_params_list[[response_var]]
+
+  data_2022 <- current_data %>% filter(Year == 2022)
+  data_2023 <- current_data %>% filter(Year == 2023)
+  key_2022 <- do.call(paste, c(data_2022[site_key], sep = "_"))
+  key_2023 <- do.call(paste, c(data_2023[site_key], sep = "_"))
+  paired_keys <- intersect(key_2022, key_2023)
+  if (length(paired_keys) < 5) {
+    cat(paste("   Too few paired traps for", response_var, "- skipped.\n"))
+    next
+  }
+  rows_2022 <- data_2022[match(paired_keys, key_2022), ]
+  rows_2023 <- data_2023[match(paired_keys, key_2023), ]
+  observed_shift <- mean(rows_2023[[response_var]] - rows_2022[[response_var]])
+
+  # Two models: trained on 2022 only (out-of-sample), and the full pooled model.
+  model_oos <- fit_xgb_model(data_2022, features, response_var, best_params)
+  model_full <- fit_xgb_model(current_data, features, response_var, best_params)
+
+  for (model_name in c("Trained on 2022 only (out-of-sample)",
+                       "Pooled model (in-sample)")) {
+    model <- if (grepl("2022 only", model_name)) model_oos else model_full
+    predicted_2022 <- predict_xgb_model(model, rows_2022, features)
+    predicted_2023 <- predict_xgb_model(model, rows_2023, features)
+    predicted_shift <- mean(predicted_2023 - predicted_2022)
+    record <- tibble(
+      Response_Var = response_var,
+      Model = model_name,
+      N_pairs = length(paired_keys),
+      Scale = if (response_var == "Total_Abundance") "log1p" else "weeks",
+      Observed_shift = observed_shift,
+      Predicted_shift = predicted_shift,
+      Shift_ratio = predicted_shift / observed_shift
+    )
+    if (response_var == "Total_Abundance") {
+      record$Observed_shift_count <-
+        mean(expm1(rows_2023[[response_var]]) - expm1(rows_2022[[response_var]]))
+      record$Predicted_shift_count <-
+        mean(expm1(predicted_2023) - expm1(predicted_2022))
+    }
+    shift_list[[length(shift_list) + 1]] <- record
+  }
+}
+paired_site_table <- bind_rows(shift_list)
+
+write.csv(rank_corr_table,
+          file.path(dir_evaluation, "out_of_year_rank_correlation.csv"), row.names = FALSE)
+write.csv(paired_site_table,
+          file.path(dir_evaluation, "paired_site_interannual_shift.csv"), row.names = FALSE)
+print(rank_corr_table %>% mutate(across(where(is.numeric), ~ round(., 3))))
+print(paired_site_table %>% mutate(across(where(is.numeric), ~ round(., 3))), n = 50)
+
+
+#### 6. Extreme-Value (Outbreak) Diagnostic (Text S4) ####
+#
+# Description:
+# Uses the out-of-fold abundance predictions from Section 3 (back-transformed to
+# counts) to quantify how well the model captures the largest outbreaks: the
+# recall of the top-decile outbreak traps and the mean predicted/observed ratio
+# in the highest-abundance decile. This reproduces the extreme-value numbers
+# reported in Text S4.
+#
+
+print("\n--- 6. Extreme-Value (Outbreak) Diagnostic (for Text S4) ---")
+
+top_fraction <- 0.10
+abundance_oof <- oof_data %>% filter(Response_Var == "Total_Abundance")
+observed_counts <- expm1(abundance_oof$Observed)
+predicted_counts <- expm1(abundance_oof$Predicted)
+
+n_total <- length(observed_counts)
+n_top <- max(1, round(n_total * top_fraction))
+observed_top <- order(observed_counts, decreasing = TRUE)[seq_len(n_top)]
+predicted_top <- order(predicted_counts, decreasing = TRUE)[seq_len(n_top)]
+outbreak_recall <- length(intersect(observed_top, predicted_top)) / n_top
+
+decile_threshold <- quantile(observed_counts, 1 - top_fraction)
+in_top_decile <- observed_counts >= decile_threshold
+mean_ratio_top_decile <-
+  mean(predicted_counts[in_top_decile] / pmax(observed_counts[in_top_decile], 1))
+
+extreme_value_table <- tibble(
+  Metric = c(
+    "N (abundance traps)",
+    "Top-decile trap count",
+    "Top-decile outbreak recall",
+    "Mean predicted/observed ratio (highest-abundance decile)"
+  ),
+  Value = c(n_total, n_top, outbreak_recall, mean_ratio_top_decile)
+)
+write.csv(extreme_value_table,
+          file.path(dir_evaluation, "extreme_value_metrics.csv"), row.names = FALSE)
+print(extreme_value_table %>% mutate(Value = round(Value, 3)))
+
 
 print("\n--- All supplementary validation analyses complete. ---")

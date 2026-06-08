@@ -19,6 +19,11 @@
 # This script must be run AFTER the main
 # '02_run_xgboost_pipeline.R' has successfully completed.
 #
+# Note on xgboost version:
+# This script loads the fitted xgboost model objects saved by script 02
+# (definitive_model_*.rds). Model objects serialized with xgboost < 2.0 cannot
+# be reloaded under xgboost >= 2.0, so this script requires xgboost < 2.0.
+#
 # -------------------------------------------------------------------------- #
 
 # The analyses include:
@@ -44,6 +49,18 @@ suppressPackageStartupMessages({
   library(sf)        # For distance calculations
   library(patchwork) # For combining appendix plots
 })
+
+#---- 0.1b. xgboost version check ----
+# This script loads xgboost model objects saved by script 02. Models serialized
+# under xgboost < 2.0 cannot be reloaded under xgboost >= 2.0; stop early with a
+# clear message.
+if (utils::packageVersion("xgboost") >= "2.0.0") {
+  stop(
+    "Script 03 requires xgboost < 2.0: it loads xgboost models serialized under ",
+    "xgboost < 2.0, which cannot be reloaded under xgboost >= 2.0 (see README).",
+    call. = FALSE
+  )
+}
 
 #---- 0.2. Define File Paths ----
 dir_output_base <- here("output")

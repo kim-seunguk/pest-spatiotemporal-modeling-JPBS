@@ -47,3 +47,15 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Generated outputs are regenerable and not tracked, EXCEPT the small trained
+# artifacts that the optional/evaluation scripts (02b, 04) load: the prepared
+# modeling data, the tuned hyperparameters, and the feature sets.
+/output/*
+!/output/models
+!/output/prepared_data
+/output/models/*
+!/output/models/definitive_best_params_*.rds
+!/output/models/definitive_features_*.rds
+/output/prepared_data/*
+!/output/prepared_data/master_data.rds

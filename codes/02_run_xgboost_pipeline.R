@@ -20,6 +20,14 @@
 # 2. The provided predictor rasters (Host maps, Bioclim, LST, etc.)
 #    placed in the 'data/predictors/1km/' directory.
 #
+# Note on xgboost version:
+# The published results were produced with xgboost < 2.0. The hyperparameter
+# tuning below uses caret's "xgbTree" method, which is not compatible with
+# xgboost >= 2.0 (the tuning step errors on a current xgboost). The data
+# preparation in Section 1 still runs and saves master_data.rds. To reproduce
+# the model building on a current xgboost, see the optional companion script
+# '02b_tidymodels_reproduction.R'.
+#
 # -------------------------------------------------------------------------- #
 
 # RStudio Document Outline (####) Pipeline Flow:
@@ -62,6 +70,19 @@ suppressPackageStartupMessages({
   library(ggtext)
   library(glue)
 })
+
+#---- 0.1b. xgboost version check ----
+# The hyperparameter tuning in Section 2 uses caret's "xgbTree", which is not
+# compatible with xgboost >= 2.0. Stop early with a clear message rather than
+# failing deep inside the tuning loop.
+if (utils::packageVersion("xgboost") >= "2.0.0") {
+  stop(
+    "Script 02 requires xgboost < 2.0: caret's xgbTree is not compatible with ",
+    "xgboost >= 2.0. On a current xgboost, run 'codes/02b_tidymodels_reproduction.R' ",
+    "for the model building instead (see README).",
+    call. = FALSE
+  )
+}
 
 #---- 0.2. Global Settings ----
 target_resolution <- "1km"
